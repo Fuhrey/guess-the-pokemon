@@ -16,6 +16,17 @@
         <header>
             <h1>Guess the Pokémon</h1>
             <p class="subtitle">Can you catch 'em all?</p>
+            <div class="mode-container">
+                <div class="mode-indicator">
+                    <span id="current-mode">Daily Challenge</span>
+                </div>
+                <div class="mode-toggle">
+                    <label class="switch">
+                        <input type="checkbox" id="mode-switch">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
         </header>
 
         <div class="game-container">
@@ -50,6 +61,7 @@
                 <div class="pokemon-reveal" id="pokemon-reveal"></div>
                 <button id="share-button"><i class="fas fa-share-alt"></i> Share Result</button>
                 <button id="play-again"><i class="fas fa-redo"></i> Play Again</button>
+                <button id="free-play-button"><i class="fas fa-gamepad"></i> Free Play</button>
             </div>
         </div>
 
@@ -125,7 +137,11 @@
         <div class="modal-content">
             <span class="close-button">&times;</span>
             <h2><i class="fas fa-chart-bar"></i> Your Stats</h2>
-            <div class="stats-container">
+            <div class="stats-tabs">
+                <button class="tab-button active" id="daily-stats-tab">Daily Challenge</button>
+                <button class="tab-button" id="free-play-stats-tab">Free Play</button>
+            </div>
+            <div class="stats-container" id="daily-stats-container">
                 <div class="stat-box">
                     <i class="fas fa-gamepad stat-icon"></i>
                     <span class="stat-number" id="games-played">0</span>
@@ -146,10 +162,32 @@
                     <span class="stat-number" id="max-streak">0</span>
                     <span class="stat-label">Max Streak</span>
                 </div>
+                <h3><i class="fas fa-chart-line"></i> Guess Distribution</h3>
+                <div class="guess-distribution" id="guess-distribution">
+                    <!-- Will be populated by JavaScript -->
+                </div>
             </div>
-            <h3><i class="fas fa-chart-line"></i> Guess Distribution</h3>
-            <div class="guess-distribution" id="guess-distribution">
-                <!-- Will be populated by JavaScript -->
+            <div class="stats-container" id="free-play-stats-container" style="display: none;">
+                <div class="stat-box">
+                    <i class="fas fa-gamepad stat-icon"></i>
+                    <span class="stat-number" id="fp-games-played">0</span>
+                    <span class="stat-label">Total Games</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-trophy stat-icon"></i>
+                    <span class="stat-number" id="fp-wins">0</span>
+                    <span class="stat-label">Total Wins</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-star stat-icon"></i>
+                    <span class="stat-number" id="fp-avg-attempts">0</span>
+                    <span class="stat-label">Avg Attempts</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-award stat-icon"></i>
+                    <span class="stat-number" id="fp-best-score">-</span>
+                    <span class="stat-label">Best Score</span>
+                </div>
             </div>
         </div>
     </div>

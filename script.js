@@ -15,30 +15,45 @@ const gameState = {
     isGameOver: false,
     isGameWon: false,
     guessHistory: [],
+    gameMode: 'daily', // 'daily' or 'freePlay'
     
     // Game statistics
     stats: {
-        gamesPlayed: 0,
-        gamesWon: 0,
-        currentStreak: 0,
-        maxStreak: 0,
-        guessDistribution: {
-            1: 0,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-            6: 0
+        daily: {
+            gamesPlayed: 0,
+            gamesWon: 0,
+            currentStreak: 0,
+            maxStreak: 0,
+            guessDistribution: {
+                1: 0,
+                2: 0,
+                3: 0,
+                4: 0,
+                5: 0,
+                6: 0
+            },
+            lastPlayed: null
         },
-        lastPlayed: null
+        freePlay: {
+            gamesPlayed: 0,
+            gamesWon: 0,
+            totalAttempts: 0,
+            bestScore: Infinity
+        }
     },
     
     // Reset game state for a new game
-    reset: function() {
+    reset: function(keepMode = true) {
         this.attempts = 0;
         this.isGameOver = false;
         this.isGameWon = false;
         this.guessHistory = [];
+        if (!keepMode) {
+            this.gameMode = 'daily';
+        }
+        
+        // Set max attempts based on mode
+        this.maxAttempts = this.gameMode === 'daily' ? 6 : Infinity;
     },
     
     // Add a guess to history
@@ -52,7 +67,7 @@ const gameState = {
     shouldEndGame: function(guessedPokemon) {
         if (guessedPokemon.name === this.targetPokemon.name) {
             return { ended: true, won: true };
-        } else if (this.attempts >= this.maxAttempts) {
+        } else if (this.gameMode === 'daily' && this.attempts >= this.maxAttempts) {
             return { ended: true, won: false };
         }
         return { ended: false, won: false };
@@ -63,24 +78,45 @@ const gameState = {
         this.isGameOver = true;
         this.isGameWon = won;
         
-        this.stats.gamesPlayed++;
-        if (won) {
-            this.stats.gamesWon++;
-            this.stats.currentStreak++;
-            this.stats.guessDistribution[this.attempts]++;
+        if (this.gameMode === 'daily') {
+            this.stats.daily.gamesPlayed++;
+            if (won) {
+                this.stats.daily.gamesWon++;
+                this.stats.daily.currentStreak++;
+                this.stats.daily.guessDistribution[this.attempts]++;
+            } else {
+                this.stats.daily.currentStreak = 0;
+            }
+            
+            this.stats.daily.maxStreak = Math.max(this.stats.daily.maxStreak, this.stats.daily.currentStreak);
+            this.stats.daily.lastPlayed = new Date().toDateString();
         } else {
-            this.stats.currentStreak = 0;
+            this.stats.freePlay.gamesPlayed++;
+            if (won) {
+                this.stats.freePlay.gamesWon++;
+                this.stats.freePlay.totalAttempts += this.attempts;
+                this.stats.freePlay.bestScore = Math.min(this.stats.freePlay.bestScore, this.attempts);
+            }
         }
-        
-        this.stats.maxStreak = Math.max(this.stats.maxStreak, this.stats.currentStreak);
-        this.stats.lastPlayed = new Date().toDateString();
+    },
+    
+    // Check if player has access to free play mode
+    canAccessFreePlay: function() {
+        const today = new Date().toDateString();
+        return this.stats.daily.lastPlayed === today;
+    },
+    
+    // Set game mode
+    setGameMode: function(mode) {
+        this.gameMode = mode;
+        this.maxAttempts = mode === 'daily' ? 6 : Infinity;
     }
 };
 
 // Maintain legacy variables for compatibility with existing code
 let targetPokemon = null;
 let attempts = 0;
-const maxAttempts = 6;
+let maxAttempts = 6;
 let gameOver = false;
 let gameWon = false;
 let guessHistory = [];
@@ -94,6 +130,7 @@ const resultMessage = document.getElementById('result-message');
 const pokemonReveal = document.getElementById('pokemon-reveal');
 const shareButton = document.getElementById('share-button');
 const playAgainButton = document.getElementById('play-again');
+const freePlayButton = document.getElementById('free-play-button');
 const currentAttemptSpan = document.getElementById('current-attempt');
 const maxAttemptsSpan = document.getElementById('max-attempts');
 const rulesLink = document.getElementById('rules-link');
@@ -102,6 +139,12 @@ const rulesModal = document.getElementById('rules-modal');
 const statsModal = document.getElementById('stats-modal');
 const closeButtons = document.querySelectorAll('.close-button');
 const searchResults = document.getElementById('search-results');
+const currentModeSpan = document.getElementById('current-mode');
+const modeSwitch = document.getElementById('mode-switch');
+const dailyStatsTab = document.getElementById('daily-stats-tab');
+const freePlayStatsTab = document.getElementById('free-play-stats-tab');
+const dailyStatsContainer = document.getElementById('daily-stats-container');
+const freePlayStatsContainer = document.getElementById('free-play-stats-container');
 
 // Stats variables
 let stats = {
@@ -132,14 +175,31 @@ function initGame() {
     
     // Check if the player has already played today
     const today = new Date().toDateString();
-    if (stats.lastPlayed === today) {
-        // Player has already played today, show their previous result
-        console.log('Player already played today, loading saved game');
+    
+    // Hide mode switch initially
+    if (gameState.stats.daily.lastPlayed === today) {
+        // Player has already played or failed today, enable free play
+        console.log('Player already played today, can access free play');
+        document.querySelector('.mode-toggle').style.display = 'flex';
+    } else {
+        // New day, start with daily challenge
+        console.log('New game for today');
+        document.querySelector('.mode-toggle').style.display = 'none';
+        gameState.setGameMode('daily');
+        updateModeDisplay();
+    }
+    
+    // Update game mode display
+    updateModeDisplay();
+    
+    // Select appropriate Pokémon based on mode
+    if (gameState.stats.daily.lastPlayed === today) {
+        // Player has already played today, load saved game
+        console.log('Loading saved game');
         loadTodaysGame();
     } else {
-        // New day, new Pokémon
-        console.log('New game for today');
-        selectDailyPokemon();
+        // New daily challenge
+        selectPokemon();
     }
     
     // Add event listeners
@@ -148,134 +208,197 @@ function initGame() {
     console.log('Game initialized successfully');
 }
 
-// Set up event listeners - extracted from initGame for modularity
+// Setup event listeners
 function setupEventListeners() {
-    // Main game controls
-    guessButton.addEventListener('click', handleGuess);
-    pokemonGuessInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            handleGuess();
-        }
-    });
-    
-    // Add search functionality
-    pokemonGuessInput.addEventListener('input', handleSearch);
-    pokemonGuessInput.addEventListener('focus', function() {
-        if (pokemonGuessInput.value.length > 0) {
-            showSearchResults(pokemonGuessInput.value);
-        }
-    });
-    
-    // Close search results when clicking outside
-    document.addEventListener('click', function(e) {
-        if (e.target !== pokemonGuessInput && e.target !== searchResults) {
-            searchResults.style.display = 'none';
-        }
-    });
-    
-    // Game control buttons
-    shareButton.addEventListener('click', shareResult);
-    playAgainButton.addEventListener('click', resetGame);
-    
-    // Modal controls
-    rulesLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        rulesModal.style.display = 'block';
-    });
-    
-    statsLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        updateStatsDisplay();
-        statsModal.style.display = 'block';
-    });
-    
-    closeButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            rulesModal.style.display = 'none';
-            statsModal.style.display = 'none';
+    try {
+        console.log('Setting up event listeners...');
+        
+        // Game input events
+        pokemonGuessInput.addEventListener('input', handleSearch);
+        guessButton.addEventListener('click', handleGuess);
+        pokemonGuessInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleGuess();
+            }
         });
-    });
-    
-    window.addEventListener('click', function(e) {
-        if (e.target === rulesModal) {
-            rulesModal.style.display = 'none';
-        }
-        if (e.target === statsModal) {
-            statsModal.style.display = 'none';
-        }
-    });
+        
+        // Search dropdown handling
+        pokemonGuessInput.addEventListener('focus', function() {
+            if (pokemonGuessInput.value.length > 0) {
+                showSearchResults(pokemonGuessInput.value);
+            }
+        });
+        
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target !== pokemonGuessInput && e.target !== searchResults) {
+                searchResults.style.display = 'none';
+            }
+        });
+        
+        // Modal events
+        rulesLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            rulesModal.style.display = 'block';
+        });
+        
+        statsLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            statsModal.style.display = 'block';
+            updateStatsDisplay();
+        });
+        
+        closeButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                button.closest('.modal').style.display = 'none';
+            });
+        });
+        
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        });
+        
+        // Share and play again buttons
+        shareButton.addEventListener('click', shareResult);
+        playAgainButton.addEventListener('click', resetGame);
+        
+        // Free Play button
+        freePlayButton.addEventListener('click', function() {
+            if (gameState.canAccessFreePlay()) {
+                gameState.setGameMode('freePlay');
+                updateModeDisplay();
+                resetGame(true); // Keep the mode
+            } else {
+                alert('Complete today\'s daily challenge first to unlock Free Play mode!');
+            }
+        });
+        
+        // Mode toggle switch
+        modeSwitch.addEventListener('change', function() {
+            if (!gameState.canAccessFreePlay() && this.checked) {
+                // Trying to switch to free play without completing daily challenge
+                alert('Complete today\'s daily challenge first to unlock Free Play mode!');
+                this.checked = false;
+                return;
+            }
+            
+            gameState.setGameMode(this.checked ? 'freePlay' : 'daily');
+            updateModeDisplay();
+            resetGame(true); // Keep the mode
+        });
+        
+        // Stats tab buttons
+        dailyStatsTab.addEventListener('click', function() {
+            dailyStatsTab.classList.add('active');
+            freePlayStatsTab.classList.remove('active');
+            dailyStatsContainer.style.display = 'block';
+            freePlayStatsContainer.style.display = 'none';
+        });
+        
+        freePlayStatsTab.addEventListener('click', function() {
+            freePlayStatsTab.classList.add('active');
+            dailyStatsTab.classList.remove('active');
+            freePlayStatsContainer.style.display = 'block';
+            dailyStatsContainer.style.display = 'none';
+        });
+        
+        console.log('Event listeners set up successfully');
+    } catch (error) {
+        console.error('Error setting up event listeners:', error);
+    }
 }
 
 // Handle search input
 function handleSearch() {
-    const searchTerm = pokemonGuessInput.value.trim().toLowerCase();
-    console.log('Search term:', searchTerm);
-    
-    if (searchTerm.length < 1) {
-        searchResults.style.display = 'none';
-        return;
+    try {
+        const searchTerm = pokemonGuessInput.value.trim();
+        if (searchTerm.length > 0) {
+            showSearchResults(searchTerm);
+        } else {
+            searchResults.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error handling search:', error);
     }
-    
-    showSearchResults(searchTerm);
 }
 
 // Show search results based on input
 function showSearchResults(searchTerm) {
-    console.log('pokemonData length:', pokemonData ? pokemonData.length : 'undefined');
-    
-    // Filter Pokémon that match the search term
-    const filteredPokemon = pokemonData.filter(pokemon => 
-        pokemon.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
-    console.log('Filtered Pokémon:', filteredPokemon);
-    
-    // Clear previous results
-    searchResults.innerHTML = '';
-    
-    // If no results, hide the container
-    if (filteredPokemon.length === 0) {
-        searchResults.style.display = 'none';
-        return;
-    }
-    
-    // Add results to the container
-    filteredPokemon.slice(0, 5).forEach(pokemon => {
-        const resultItem = document.createElement('div');
-        resultItem.className = 'search-result-item';
-        resultItem.textContent = pokemon.name;
+    try {
+        // Clear previous results
+        searchResults.innerHTML = '';
         
-        // Add click event to select this Pokémon
-        resultItem.addEventListener('click', function() {
-            console.log('Pokemon selected:', pokemon.name);
-            pokemonGuessInput.value = pokemon.name;
+        if (searchTerm.length < 2) {
             searchResults.style.display = 'none';
+            return;
+        }
+        
+        // Filter Pokémon that match the search term
+        const matchingPokemon = pokemonData.filter(pokemon => 
+            pokemon.name.toLowerCase().includes(searchTerm.toLowerCase())
+        ).slice(0, 5); // Limit to 5 results for performance
+        
+        if (matchingPokemon.length === 0) {
+            searchResults.style.display = 'none';
+            return;
+        }
+        
+        // Create result elements
+        matchingPokemon.forEach(pokemon => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            resultItem.textContent = pokemon.name;
+            
+            resultItem.addEventListener('click', function() {
+                pokemonGuessInput.value = pokemon.name;
+                searchResults.style.display = 'none';
+                handleGuess();
+            });
+            
+            searchResults.appendChild(resultItem);
         });
         
-        searchResults.appendChild(resultItem);
-    });
-    
-    console.log('Search results container display:', searchResults.style.display);
-    // Show the results container
-    searchResults.style.display = 'block';
+        searchResults.style.display = 'block';
+    } catch (error) {
+        console.error('Error showing search results:', error);
+    }
 }
 
-// Select a daily Pokémon based on the date
+// Select a Pokémon based on the current game mode
+function selectPokemon() {
+    if (gameState.gameMode === 'daily') {
+        selectDailyPokemon();
+    } else {
+        selectRandomPokemon();
+    }
+}
+
+// Select daily Pokémon (seeded random based on date)
 function selectDailyPokemon() {
     try {
-        // Use the date as a seed for the random selection
+        console.log('Selecting daily Pokémon...');
+        
+        // Daily challenge mode - use date-based selection
         const today = new Date();
         const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
         const randomIndex = seededRandom(seed, pokemonData.length);
+        const selectedPokemon = pokemonData[randomIndex];
         
-        // Set the target Pokémon
-        gameState.targetPokemon = pokemonData[randomIndex];
-        targetPokemon = pokemonData[randomIndex]; // For compatibility with existing code
+        // Update game state
+        gameState.targetPokemon = selectedPokemon;
         
-        console.log("Today's Pokémon selected:", gameState.targetPokemon.name);
+        // Update legacy variable for compatibility
+        targetPokemon = selectedPokemon;
+        
+        console.log(`Selected Pokémon for daily challenge: ${selectedPokemon.name}`);
+        
+        // Save game state
+        saveTodaysGame();
     } catch (error) {
-        console.error('Error selecting daily Pokémon:', error);
-        alert('There was a problem selecting today\'s Pokémon. Please refresh the page.');
+        console.error('Error selecting Pokémon:', error);
+        alert('There was a problem selecting a Pokémon. Please refresh the page.');
     }
 }
 
@@ -290,73 +413,130 @@ function seededRandom(seed, max) {
     return Math.floor((z / m) * max);
 }
 
+// Select completely random Pokémon for free play
+function selectRandomPokemon() {
+    try {
+        console.log('Selecting random Pokémon for free play...');
+        
+        // Free play mode - use pure random selection
+        const randomIndex = Math.floor(Math.random() * pokemonData.length);
+        const selectedPokemon = pokemonData[randomIndex];
+        
+        // Update game state
+        gameState.targetPokemon = selectedPokemon;
+        
+        // Update legacy variable for compatibility
+        targetPokemon = selectedPokemon;
+        
+        console.log(`Selected random Pokémon for free play: ${selectedPokemon.name}`);
+    } catch (error) {
+        console.error('Error selecting random Pokémon:', error);
+        alert('There was a problem selecting a Pokémon. Please refresh the page.');
+    }
+}
+
+// Reset game
+function resetGame(keepMode = false) {
+    try {
+        console.log('Resetting game...');
+        
+        // Reset game state
+        gameState.reset(keepMode);
+        
+        // Reset legacy variables for compatibility
+        attempts = 0;
+        gameOver = false;
+        gameWon = false;
+        guessHistory = [];
+        
+        // Update UI
+        currentAttemptSpan.textContent = '1';
+        guessesContainer.innerHTML = '';
+        resultContainer.style.display = 'none';
+        
+        // Re-enable input
+        pokemonGuessInput.disabled = false;
+        guessButton.disabled = false;
+        
+        // Clear localStorage if we're doing a complete reset 
+        // (only for daily mode or if not keeping mode)
+        if (gameState.gameMode === 'daily' || !keepMode) {
+            localStorage.removeItem('todaysGame');
+        }
+        
+        // Select a new Pokémon based on game mode
+        selectPokemon();
+        
+        // Update mode display
+        updateModeDisplay();
+        
+        console.log('Game reset complete');
+    } catch (error) {
+        console.error('Error resetting game:', error);
+        alert('There was a problem resetting the game. Please refresh the page.');
+    }
+}
+
 // Handle a guess submission
 function handleGuess() {
     try {
-        // Don't process guesses if the game is over
-        if (gameState.isGameOver || gameOver) {
-            console.log('Game is already over, ignoring guess');
+        if (gameState.isGameOver) {
+            console.log('Game already over');
             return;
         }
         
-        const guess = pokemonGuessInput.value.trim();
-        
-        // Validate the guess
-        if (!guess) {
+        const pokemonName = pokemonGuessInput.value.trim();
+        if (!pokemonName) {
             alert('Please enter a Pokémon name');
             return;
         }
         
-        console.log('Processing guess:', guess);
-        
-        // Find the guessed Pokémon in our data
-        const guessedPokemon = pokemonData.find(p => p.name.toLowerCase() === guess.toLowerCase());
-        
+        // Check if the entered Pokémon is valid
+        const guessedPokemon = pokemonData.find(p => p.name.toLowerCase() === pokemonName.toLowerCase());
         if (!guessedPokemon) {
-            alert('Pokémon not found in our database. Please select from the suggestions.');
+            alert('Invalid Pokémon name. Please select from the dropdown.');
             return;
         }
         
-        // Check if this Pokémon was already guessed
-        if (gameState.guessHistory.some(g => g.name.toLowerCase() === guess.toLowerCase()) ||
-            guessHistory.some(g => g.name.toLowerCase() === guess.toLowerCase())) {
+        // Check if the Pokémon has already been guessed
+        if (gameState.guessHistory.some(p => p.name.toLowerCase() === guessedPokemon.name.toLowerCase())) {
             alert('You already guessed this Pokémon!');
             return;
         }
         
-        // Add guess to game state
+        // Add to guess history
         gameState.addGuess(guessedPokemon);
         
-        // Also update legacy variables for compatibility
-        attempts++;
+        // For compatibility with legacy code
+        attempts = gameState.attempts;
         guessHistory.push(guessedPokemon);
         
-        // Update attempt counter in UI
+        // Update UI
         updateAttemptCounter();
         
-        // Compare the guess with the target
-        const comparison = comparePokemon(guessedPokemon, gameState.targetPokemon || targetPokemon);
+        // Compare with target
+        const comparison = comparePokemon(guessedPokemon, gameState.targetPokemon);
         
-        // Display the guess result
+        // Display result
         displayGuessResult(guessedPokemon, comparison);
         
-        // Clear the input
+        // Clear input
         pokemonGuessInput.value = '';
         searchResults.style.display = 'none';
         
-        // Check if the game should end
+        // Check if game should end
         const gameStatus = gameState.shouldEndGame(guessedPokemon);
-        
         if (gameStatus.ended) {
             endGame(gameStatus.won);
         }
         
-        // Save the current game state
-        saveTodaysGame();
-        
+        // Save game state
+        if (gameState.gameMode === 'daily') {
+            saveTodaysGame();
+        }
     } catch (error) {
-        console.error('Error in handleGuess:', error);
-        alert('Something went wrong processing your guess. Please try again.');
+        console.error('Error handling guess:', error);
+        alert('There was a problem processing your guess. Please try again.');
     }
 }
 
@@ -562,18 +742,20 @@ function endGame(won) {
         gameOver = true;
         gameWon = won;
         
-        // Update stats
-        stats.gamesPlayed++;
-        if (won) {
-            stats.gamesWon++;
-            stats.currentStreak++;
-            stats.guessDistribution[attempts]++;
-        } else {
-            stats.currentStreak = 0;
+        // Update stats based on mode
+        if (gameState.gameMode === 'daily') {
+            stats.gamesPlayed++;
+            if (won) {
+                stats.gamesWon++;
+                stats.currentStreak++;
+                stats.guessDistribution[attempts]++;
+            } else {
+                stats.currentStreak = 0;
+            }
+            
+            stats.maxStreak = Math.max(stats.maxStreak, stats.currentStreak);
+            stats.lastPlayed = new Date().toDateString();
         }
-        
-        stats.maxStreak = Math.max(stats.maxStreak, stats.currentStreak);
-        stats.lastPlayed = new Date().toDateString();
         
         // Save stats
         saveStats();
@@ -601,6 +783,14 @@ function endGame(won) {
         // Disable input
         pokemonGuessInput.disabled = true;
         guessButton.disabled = true;
+        
+        // Show/hide free play button
+        freePlayButton.style.display = gameState.gameMode === 'daily' ? 'inline-block' : 'none';
+        
+        // If won or lost daily challenge, enable access to free play
+        if (gameState.gameMode === 'daily') {
+            document.querySelector('.mode-toggle').style.display = 'flex';
+        }
     } catch (error) {
         console.error('Error ending game:', error);
         alert('There was a problem completing the game. Your progress might not be saved correctly.');
@@ -609,100 +799,81 @@ function endGame(won) {
 
 // Share the result
 function shareResult() {
-    let shareText = `Guess the Pokémon - ${new Date().toLocaleDateString()}\n`;
-    
-    if (gameWon) {
-        shareText += `Caught in ${attempts}/${maxAttempts} tries!\n\n`;
-    } else {
-        shareText += `Failed to catch ${targetPokemon.name}!\n\n`;
-    }
-    
-    // Add emoji representation of guesses
-    guessHistory.forEach((guess, index) => {
-        const comparison = comparePokemon(guess, targetPokemon);
-        
-        let rowEmojis = '';
-        
-        // Name
-        rowEmojis += comparison.name.status === 'correct' ? '🟩' : '🟥';
-        
-        // Type (both types)
-        rowEmojis += comparison.type.status === 'correct' ? '🟩' : comparison.type.status === 'close' ? '🟨' : '🟥';
-        
-        // Pokédex number
-        rowEmojis += comparison.pokedex.status === 'correct' ? '🟩' : '🟥';
-        if (comparison.pokedex.direction === 'up') rowEmojis += '⬆️';
-        if (comparison.pokedex.direction === 'down') rowEmojis += '⬇️';
-        
-        // Classification
-        rowEmojis += comparison.classification.status === 'correct' ? '🟩' : '🟥';
-        
-        // Height
-        rowEmojis += comparison.height.status === 'correct' ? '🟩' : comparison.height.status === 'close' ? '🟨' : '🟥';
-        if (comparison.height.direction === 'up') rowEmojis += '⬆️';
-        if (comparison.height.direction === 'down') rowEmojis += '⬇️';
-        
-        // Weight
-        rowEmojis += comparison.weight.status === 'correct' ? '🟩' : comparison.weight.status === 'close' ? '🟨' : '🟥';
-        if (comparison.weight.direction === 'up') rowEmojis += '⬆️';
-        if (comparison.weight.direction === 'down') rowEmojis += '⬇️';
-        
-        shareText += `${rowEmojis} (${index + 1})\n`;
-    });
-    
-    shareText += '\nPlay Guess the Pokémon: [your-game-url]';
-    
-    // Copy to clipboard
-    navigator.clipboard.writeText(shareText)
-        .then(() => {
-            alert('Result copied to clipboard!');
-        })
-        .catch(err => {
-            console.error('Failed to copy: ', err);
-            // Fallback
-            const textarea = document.createElement('textarea');
-            textarea.value = shareText;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            alert('Result copied to clipboard!');
-        });
-}
-
-// Reset the game
-function resetGame() {
     try {
-        console.log('Resetting game...');
+        // Different share text based on game mode
+        let shareText = gameState.gameMode === 'daily' 
+            ? `Guess the Pokémon - Daily Challenge (${new Date().toLocaleDateString()})\n` 
+            : `Guess the Pokémon - Free Play Mode\n`;
         
-        // Reset game state
-        gameState.reset();
+        if (gameState.isGameWon) {
+            if (gameState.gameMode === 'daily') {
+                shareText += `Caught in ${gameState.attempts}/${gameState.maxAttempts} tries!\n\n`;
+            } else {
+                shareText += `Caught in ${gameState.attempts} tries!\n\n`;
+            }
+        } else {
+            shareText += `Failed to catch ${gameState.targetPokemon.name}!\n\n`;
+        }
         
-        // Reset legacy variables for compatibility
-        attempts = 0;
-        gameOver = false;
-        gameWon = false;
-        guessHistory = [];
+        // Add emoji representation of guesses
+        gameState.guessHistory.forEach((guess, index) => {
+            const comparison = comparePokemon(guess, gameState.targetPokemon);
+            
+            let rowEmojis = '';
+            
+            // Name
+            rowEmojis += comparison.name.status === 'correct' ? '🟩' : '🟥';
+            
+            // Type (both types)
+            rowEmojis += comparison.type.status === 'correct' ? '🟩' : comparison.type.status === 'close' ? '🟨' : '🟥';
+            
+            // Pokédex number
+            rowEmojis += comparison.pokedex.status === 'correct' ? '🟩' : '🟥';
+            if (comparison.pokedex.direction === 'up') rowEmojis += '⬆️';
+            if (comparison.pokedex.direction === 'down') rowEmojis += '⬇️';
+            
+            // Classification
+            rowEmojis += comparison.classification.status === 'correct' ? '🟩' : '🟥';
+            
+            // Height
+            rowEmojis += comparison.height.status === 'correct' ? '🟩' : comparison.height.status === 'close' ? '🟨' : '🟥';
+            if (comparison.height.direction === 'up') rowEmojis += '⬆️';
+            if (comparison.height.direction === 'down') rowEmojis += '⬇️';
+            
+            // Weight
+            rowEmojis += comparison.weight.status === 'correct' ? '🟩' : comparison.weight.status === 'close' ? '🟨' : '🟥';
+            if (comparison.weight.direction === 'up') rowEmojis += '⬆️';
+            if (comparison.weight.direction === 'down') rowEmojis += '⬇️';
+            
+            shareText += `${rowEmojis} (${index + 1})\n`;
+        });
         
-        // Update UI
-        currentAttemptSpan.textContent = '1';
-        guessesContainer.innerHTML = '';
-        resultContainer.style.display = 'none';
+        // Add game url and mode
+        if (gameState.gameMode === 'daily') {
+            shareText += '\nPlay Guess the Pokémon Daily Challenge: [your-game-url]';
+        } else {
+            shareText += '\nPlay Guess the Pokémon Free Play Mode: [your-game-url]';
+        }
         
-        // Re-enable input
-        pokemonGuessInput.disabled = false;
-        guessButton.disabled = false;
-        
-        // Clear localStorage if we're doing a complete reset
-        localStorage.removeItem('todaysGame');
-        
-        // Select a new random Pokémon
-        selectDailyPokemon();
-        
-        console.log('Game reset complete');
+        // Copy to clipboard
+        navigator.clipboard.writeText(shareText)
+            .then(() => {
+                alert('Result copied to clipboard!');
+            })
+            .catch(err => {
+                console.error('Failed to copy: ', err);
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = shareText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Result copied to clipboard!');
+            });
     } catch (error) {
-        console.error('Error resetting game:', error);
-        alert('There was a problem resetting the game. Please refresh the page.');
+        console.error('Error sharing result:', error);
+        alert('There was a problem sharing your result.');
     }
 }
 
@@ -714,7 +885,8 @@ function saveTodaysGame() {
             attempts: gameState.attempts || attempts,
             guessHistory: gameState.guessHistory.length > 0 ? gameState.guessHistory : guessHistory,
             gameOver: gameState.isGameOver || gameOver,
-            gameWon: gameState.isGameWon || gameWon
+            gameWon: gameState.isGameWon || gameWon,
+            gameMode: gameState.gameMode // Store the current game mode
         };
         
         localStorage.setItem('todaysGame', JSON.stringify(gameStateToSave));
@@ -738,6 +910,7 @@ function loadTodaysGame() {
             gameState.isGameOver = savedGame.gameOver;
             gameState.isGameWon = savedGame.gameWon;
             gameState.guessHistory = savedGame.guessHistory || [];
+            gameState.gameMode = savedGame.gameMode || 'daily'; // Default to daily if not specified
             
             // Update legacy variables for compatibility
             targetPokemon = savedGame.targetPokemon;
@@ -749,6 +922,9 @@ function loadTodaysGame() {
             // Update the UI
             // Make sure to display the correct attempt counter
             updateAttemptCounter();
+            
+            // Update mode display
+            updateModeDisplay();
             
             // Replay the guesses
             if (Array.isArray(savedGame.guessHistory)) {
@@ -780,6 +956,9 @@ function loadTodaysGame() {
                 
                 resultContainer.style.display = 'block';
                 
+                // Show/hide free play button
+                freePlayButton.style.display = gameState.gameMode === 'daily' ? 'inline-block' : 'none';
+                
                 // Disable input
                 pokemonGuessInput.disabled = true;
                 guessButton.disabled = true;
@@ -788,24 +967,33 @@ function loadTodaysGame() {
     } catch (error) {
         console.error('Error loading game state:', error);
         alert('There was a problem loading your saved game. Starting a new game instead.');
-        selectDailyPokemon();
+        selectPokemon();
     }
 }
 
 // Save stats to localStorage
 function saveStats() {
     try {
-        // Merge game state stats with legacy stats object
-        const combinedStats = {
-            gamesPlayed: Math.max(gameState.stats.gamesPlayed, stats.gamesPlayed),
-            gamesWon: Math.max(gameState.stats.gamesWon, stats.gamesWon),
-            currentStreak: Math.max(gameState.stats.currentStreak, stats.currentStreak),
-            maxStreak: Math.max(gameState.stats.maxStreak, stats.maxStreak),
-            guessDistribution: stats.guessDistribution, // Use the existing one for simplicity
-            lastPlayed: stats.lastPlayed
+        // Save the daily stats in the legacy format for backward compatibility
+        const dailyStats = {
+            gamesPlayed: gameState.stats.daily.gamesPlayed,
+            gamesWon: gameState.stats.daily.gamesWon,
+            currentStreak: gameState.stats.daily.currentStreak,
+            maxStreak: gameState.stats.daily.maxStreak,
+            guessDistribution: gameState.stats.daily.guessDistribution,
+            lastPlayed: gameState.stats.daily.lastPlayed
         };
         
-        localStorage.setItem('pokemonGameStats', JSON.stringify(combinedStats));
+        // Save free play stats separately
+        const freePlayStats = {
+            gamesPlayed: gameState.stats.freePlay.gamesPlayed,
+            gamesWon: gameState.stats.freePlay.gamesWon,
+            totalAttempts: gameState.stats.freePlay.totalAttempts,
+            bestScore: gameState.stats.freePlay.bestScore
+        };
+        
+        localStorage.setItem('pokemonGameStats', JSON.stringify(dailyStats));
+        localStorage.setItem('pokemonGameFreePlayStats', JSON.stringify(freePlayStats));
         console.log('Game stats saved to localStorage');
     } catch (error) {
         console.error('Error saving stats:', error);
@@ -815,24 +1003,37 @@ function saveStats() {
 // Load stats from localStorage
 function loadStats() {
     try {
-        const savedStats = JSON.parse(localStorage.getItem('pokemonGameStats'));
+        // Load daily stats
+        const savedDailyStats = JSON.parse(localStorage.getItem('pokemonGameStats'));
         
-        if (savedStats) {
-            console.log('Loading saved stats from localStorage');
+        if (savedDailyStats) {
+            console.log('Loading saved daily stats from localStorage');
             
             // Update both state objects
-            stats = savedStats;
+            stats = savedDailyStats;
             
-            gameState.stats.gamesPlayed = savedStats.gamesPlayed;
-            gameState.stats.gamesWon = savedStats.gamesWon;
-            gameState.stats.currentStreak = savedStats.currentStreak;
-            gameState.stats.maxStreak = savedStats.maxStreak;
-            gameState.stats.lastPlayed = savedStats.lastPlayed;
+            gameState.stats.daily.gamesPlayed = savedDailyStats.gamesPlayed;
+            gameState.stats.daily.gamesWon = savedDailyStats.gamesWon;
+            gameState.stats.daily.currentStreak = savedDailyStats.currentStreak;
+            gameState.stats.daily.maxStreak = savedDailyStats.maxStreak;
+            gameState.stats.daily.lastPlayed = savedDailyStats.lastPlayed;
             
             // Only update distribution if it exists in saved stats
-            if (savedStats.guessDistribution) {
-                gameState.stats.guessDistribution = savedStats.guessDistribution;
+            if (savedDailyStats.guessDistribution) {
+                gameState.stats.daily.guessDistribution = savedDailyStats.guessDistribution;
             }
+        }
+        
+        // Load free play stats
+        const savedFreePlayStats = JSON.parse(localStorage.getItem('pokemonGameFreePlayStats'));
+        
+        if (savedFreePlayStats) {
+            console.log('Loading saved free play stats from localStorage');
+            
+            gameState.stats.freePlay.gamesPlayed = savedFreePlayStats.gamesPlayed;
+            gameState.stats.freePlay.gamesWon = savedFreePlayStats.gamesWon;
+            gameState.stats.freePlay.totalAttempts = savedFreePlayStats.totalAttempts;
+            gameState.stats.freePlay.bestScore = savedFreePlayStats.bestScore;
         }
     } catch (error) {
         console.error('Error loading stats:', error);
@@ -845,58 +1046,77 @@ function updateStatsDisplay() {
     try {
         console.log('Updating stats display...');
         
-        // Get latest stats (combine both objects to ensure we get the most up-to-date values)
-        const currentStats = {
-            gamesPlayed: Math.max(gameState.stats.gamesPlayed, stats.gamesPlayed),
-            gamesWon: Math.max(gameState.stats.gamesWon, stats.gamesWon),
-            currentStreak: Math.max(gameState.stats.currentStreak, stats.currentStreak),
-            maxStreak: Math.max(gameState.stats.maxStreak, stats.maxStreak),
-            guessDistribution: stats.guessDistribution // Use the existing one
-        };
+        // Update daily stats
+        document.getElementById('games-played').textContent = gameState.stats.daily.gamesPlayed;
         
-        // Update display elements
-        document.getElementById('games-played').textContent = currentStats.gamesPlayed;
-        
-        const winPercentage = currentStats.gamesPlayed > 0 
-            ? Math.round((currentStats.gamesWon / currentStats.gamesPlayed) * 100) 
+        const winPercentage = gameState.stats.daily.gamesPlayed > 0 
+            ? Math.round((gameState.stats.daily.gamesWon / gameState.stats.daily.gamesPlayed) * 100) 
             : 0;
-        document.getElementById('win-percentage').textContent = winPercentage + '%';
+        document.getElementById('win-percentage').textContent = `${winPercentage}%`;
         
-        document.getElementById('current-streak').textContent = currentStats.currentStreak;
-        document.getElementById('max-streak').textContent = currentStats.maxStreak;
+        document.getElementById('current-streak').textContent = gameState.stats.daily.currentStreak;
+        document.getElementById('max-streak').textContent = gameState.stats.daily.maxStreak;
         
         // Update guess distribution
-        const guessDistribution = document.getElementById('guess-distribution');
-        guessDistribution.innerHTML = '';
+        const guessDistributionDiv = document.getElementById('guess-distribution');
+        guessDistributionDiv.innerHTML = '';
         
-        // Find the highest value in distribution for scaling
-        const distributionValues = Object.values(currentStats.guessDistribution);
-        const maxGuesses = Math.max(...distributionValues);
+        // Find the max value in the distribution for scaling
+        const maxDistValue = Math.max(
+            ...Object.values(gameState.stats.daily.guessDistribution), 
+            1
+        );
         
-        // Create distribution bars
-        for (let i = 1; i <= gameState.maxAttempts; i++) {
+        for (let i = 1; i <= 6; i++) {
+            const count = gameState.stats.daily.guessDistribution[i] || 0;
+            const percentage = Math.max((count / maxDistValue) * 100, 5); // Min 5% width for visibility
+            
             const row = document.createElement('div');
             row.className = 'distribution-row';
-            
-            const guessNumber = document.createElement('div');
-            guessNumber.className = 'guess-number';
-            guessNumber.textContent = i;
-            
-            const bar = document.createElement('div');
-            bar.className = 'distribution-bar';
-            const count = currentStats.guessDistribution[i] || 0;
-            const percentage = maxGuesses > 0 ? (count / maxGuesses) * 100 : 0;
-            bar.style.width = `${Math.max(percentage, 7)}%`;
-            bar.textContent = count;
-            
-            row.appendChild(guessNumber);
-            row.appendChild(bar);
-            guessDistribution.appendChild(row);
+            row.innerHTML = `
+                <span class="attempt-number">${i}</span>
+                <div class="bar-container">
+                    <div class="bar" style="width: ${percentage}%;">${count}</div>
+                </div>
+            `;
+            guessDistributionDiv.appendChild(row);
         }
+        
+        // Update free play stats
+        document.getElementById('fp-games-played').textContent = gameState.stats.freePlay.gamesPlayed;
+        document.getElementById('fp-wins').textContent = gameState.stats.freePlay.gamesWon;
+        
+        const avgAttempts = gameState.stats.freePlay.gamesWon > 0 
+            ? (gameState.stats.freePlay.totalAttempts / gameState.stats.freePlay.gamesWon).toFixed(1) 
+            : '-';
+        document.getElementById('fp-avg-attempts').textContent = avgAttempts;
+        
+        const bestScore = gameState.stats.freePlay.bestScore < Infinity 
+            ? gameState.stats.freePlay.bestScore 
+            : '-';
+        document.getElementById('fp-best-score').textContent = bestScore;
         
         console.log('Stats display updated successfully');
     } catch (error) {
         console.error('Error updating stats display:', error);
+    }
+}
+
+// Update mode display
+function updateModeDisplay() {
+    // Update the mode indicator text
+    currentModeSpan.textContent = gameState.gameMode === 'daily' ? 'Daily Challenge' : 'Free Play';
+    
+    // Update toggle switch
+    modeSwitch.checked = gameState.gameMode === 'freePlay';
+    
+    // Update max attempts display
+    if (gameState.gameMode === 'daily') {
+        maxAttemptsSpan.textContent = '6';
+        document.querySelector('.attempts-counter').style.display = 'block';
+    } else {
+        maxAttemptsSpan.textContent = '∞';
+        // No need to hide the counter for free play
     }
 }
 
