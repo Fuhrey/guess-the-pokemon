@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guess the Pokémon</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Guess the Pokémon</h1>
+            <p class="subtitle">Can you catch 'em all?</p>
+        </header>
+
+        <div class="game-container">
+            <div class="attempts-counter">
+                <i class="fas fa-stopwatch"></i> Attempt <span id="current-attempt">1</span>/<span id="max-attempts">6</span>
+            </div>
+
+            <div class="search-container">
+                <div class="input-container">
+                    <input type="text" id="pokemon-guess" placeholder="Enter a Pokémon name..." autocomplete="off">
+                    <button id="guess-button">Guess! <i class="fas fa-search"></i></button>
+                </div>
+                <div id="search-results" class="search-results"></div>
+            </div>
+
+            <div class="guesses-container">
+                <div class="guess-header">
+                    <div class="header-item">Pokémon</div>
+                    <div class="header-item">Type</div>
+                    <div class="header-item">Pokédex</div>
+                    <div class="header-item">Classification</div>
+                    <div class="header-item">Height</div>
+                    <div class="header-item">Weight</div>
+                </div>
+                <div id="guesses">
+                    <!-- Guesses will be displayed here -->
+                </div>
+            </div>
+
+            <div class="result-container" id="result" style="display: none;">
+                <h2 id="result-message"></h2>
+                <div class="pokemon-reveal" id="pokemon-reveal"></div>
+                <button id="share-button"><i class="fas fa-share-alt"></i> Share Result</button>
+                <button id="play-again"><i class="fas fa-redo"></i> Play Again</button>
+            </div>
+        </div>
+
+        <div class="info-container">
+            <h3><i class="fas fa-info-circle"></i> How to Play</h3>
+            <p>Guess the daily Pokémon in 6 tries or less!</p>
+            <p>After each guess, you'll get feedback on how close you are:</p>
+            <ul>
+                <li><span class="correct"><i class="fas fa-check"></i></span> <strong>Green:</strong> Correct match</li>
+                <li><span class="close"><i class="fas fa-exclamation"></i></span> <strong>Yellow:</strong> Close match</li>
+                <li><span class="wrong"><i class="fas fa-times"></i></span> <strong>Red:</strong> Wrong match</li>
+                <li><span class="direction">↑/↓</span> <strong>Arrows:</strong> Higher/Lower (for numeric values)</li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>Created with <i class="fas fa-heart" style="color: var(--primary-color);"></i> for Pokémon fans | <a href="#" id="rules-link"><i class="fas fa-book"></i> Rules</a> | <a href="#" id="stats-link"><i class="fas fa-chart-bar"></i> Stats</a></p>
+        </footer>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2><i class="fas fa-book"></i> How to Play</h2>
+            <div class="rules-grid">
+                <div class="rule-item">
+                    <div class="rule-icon"><i class="fas fa-gamepad"></i></div>
+                    <div class="rule-text">
+                        <h4>Gameplay</h4>
+                        <p>Guess the daily Pokémon in 6 tries or less. Each day features a new Pokémon to discover!</p>
+                    </div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-icon"><i class="fas fa-puzzle-piece"></i></div>
+                    <div class="rule-text">
+                        <h4>Attributes</h4>
+                        <p>Compare these attributes to narrow down your guesses:</p>
+                        <ul>
+                            <li><strong>Type:</strong> Primary and secondary types</li>
+                            <li><strong>Pokédex Number:</strong> The Pokémon's number (higher/lower)</li>
+                            <li><strong>Classification:</strong> The Pokémon's category</li>
+                            <li><strong>Height:</strong> Size in meters (higher/lower)</li>
+                            <li><strong>Weight:</strong> Mass in kilograms (higher/lower)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-icon"><i class="fas fa-palette"></i></div>
+                    <div class="rule-text">
+                        <h4>Color Guide</h4>
+                        <p>Colors indicate how close your guess is:</p>
+                        <ul>
+                            <li><span class="correct"><i class="fas fa-check"></i></span> <strong>Green:</strong> Correct match</li>
+                            <li><span class="close"><i class="fas fa-exclamation"></i></span> <strong>Yellow:</strong> Close match</li>
+                            <li><span class="wrong"><i class="fas fa-times"></i></span> <strong>Red:</strong> Wrong match</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="rule-item">
+                    <div class="rule-icon"><i class="fas fa-trophy"></i></div>
+                    <div class="rule-text">
+                        <h4>Winning</h4>
+                        <p>Correctly guess the Pokémon to win! Try to maintain your streak by playing every day.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Modal -->
+    <div id="stats-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2><i class="fas fa-chart-bar"></i> Your Stats</h2>
+            <div class="stats-container">
+                <div class="stat-box">
+                    <i class="fas fa-gamepad stat-icon"></i>
+                    <span class="stat-number" id="games-played">0</span>
+                    <span class="stat-label">Played</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-percentage stat-icon"></i>
+                    <span class="stat-number" id="win-percentage">0%</span>
+                    <span class="stat-label">Win %</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-fire stat-icon"></i>
+                    <span class="stat-number" id="current-streak">0</span>
+                    <span class="stat-label">Current Streak</span>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-trophy stat-icon"></i>
+                    <span class="stat-number" id="max-streak">0</span>
+                    <span class="stat-label">Max Streak</span>
+                </div>
+            </div>
+            <h3><i class="fas fa-chart-line"></i> Guess Distribution</h3>
+            <div class="guess-distribution" id="guess-distribution">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="pokemon-data.js" type="text/javascript"></script>
+    <script>
+        // Verify Pokemon data was loaded correctly
+        window.addEventListener('DOMContentLoaded', function() {
+            if (!window.pokemonData || !Array.isArray(window.pokemonData) || window.pokemonData.length === 0) {
+                console.error('Pokemon data not loaded correctly!');
+                alert('Failed to load Pokemon data. Please refresh the page.');
+            } else {
+                console.log('Successfully loaded data for ' + window.pokemonData.length + ' Pokemon');
+            }
+        });
+    </script>
+    <script src="script.js" type="text/javascript"></script>
+</body>
+</html> 
