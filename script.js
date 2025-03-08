@@ -226,6 +226,19 @@ function setupEventListeners() {
         pokemonGuessInput.addEventListener('focus', function() {
             if (pokemonGuessInput.value.length > 0) {
                 showSearchResults(pokemonGuessInput.value);
+            } else {
+                // When input is empty, show first 5 Pokemon
+                showInitialSearchResults();
+            }
+        });
+        
+        pokemonGuessInput.addEventListener('click', function() {
+            if (searchResults.style.display !== 'block') {
+                if (pokemonGuessInput.value.length > 0) {
+                    showSearchResults(pokemonGuessInput.value);
+                } else {
+                    showInitialSearchResults();
+                }
             }
         });
         
@@ -338,18 +351,84 @@ function showSearchResults(searchTerm) {
         // Filter Pokémon that match the search term
         const matchingPokemon = pokemonData.filter(pokemon => 
             pokemon.name.toLowerCase().includes(searchTerm.toLowerCase())
-        ).slice(0, 5); // Limit to 5 results for performance
+        ); // Show all matching results
         
         if (matchingPokemon.length === 0) {
             searchResults.style.display = 'none';
             return;
         }
         
+        // Performance optimization - use document fragment
+        const fragment = document.createDocumentFragment();
+        
         // Create result elements
         matchingPokemon.forEach(pokemon => {
             const resultItem = document.createElement('div');
             resultItem.className = 'search-result-item';
-            resultItem.textContent = pokemon.name;
+            
+            // Create info container with image and text
+            const infoContainer = document.createElement('div');
+            infoContainer.className = 'pokemon-info-container';
+            
+            // Add Pokémon image
+            const imageElement = document.createElement('img');
+            imageElement.className = 'pokemon-image';
+            // Convert pokemon name to lowercase for the filename
+            const imagePath = `data/pictures/${pokemon.name.toLowerCase()}.png`;
+            imageElement.src = imagePath;
+            imageElement.alt = pokemon.name;
+            // Handle image loading errors
+            imageElement.onerror = function() {
+                this.src = 'data/pictures/placeholder.png'; // Fallback image
+                this.onerror = null; // Prevent infinite loop
+            };
+            infoContainer.appendChild(imageElement);
+            
+            // Create text content container
+            const textContainer = document.createElement('div');
+            textContainer.className = 'pokemon-text-container';
+            
+            // Create name element
+            const nameElement = document.createElement('div');
+            nameElement.className = 'pokemon-name';
+            nameElement.textContent = pokemon.name;
+            textContainer.appendChild(nameElement);
+            
+            // Create info elements
+            const detailsContainer = document.createElement('div');
+            detailsContainer.className = 'pokemon-info';
+            
+            // Add Pokédex Number
+            const pokedexElement = document.createElement('span');
+            pokedexElement.textContent = `#${pokemon.pokedex_number}`;
+            detailsContainer.appendChild(pokedexElement);
+            
+            // Add Type(s)
+            const type1Element = document.createElement('span');
+            type1Element.className = `pokemon-type ${pokemon.type1}`;
+            type1Element.textContent = pokemon.type1;
+            detailsContainer.appendChild(type1Element);
+            
+            if (pokemon.type2) {
+                const type2Element = document.createElement('span');
+                type2Element.className = `pokemon-type ${pokemon.type2}`;
+                type2Element.textContent = pokemon.type2;
+                detailsContainer.appendChild(type2Element);
+            }
+            
+            // Add Classification
+            const classElement = document.createElement('span');
+            classElement.textContent = pokemon.classfication;
+            detailsContainer.appendChild(classElement);
+            
+            // Add Height & Weight
+            const heightWeightElement = document.createElement('span');
+            heightWeightElement.textContent = `${pokemon.height_m}m, ${pokemon.weight_kg}kg`;
+            detailsContainer.appendChild(heightWeightElement);
+            
+            textContainer.appendChild(detailsContainer);
+            infoContainer.appendChild(textContainer);
+            resultItem.appendChild(infoContainer);
             
             resultItem.addEventListener('click', function() {
                 pokemonGuessInput.value = pokemon.name;
@@ -357,12 +436,111 @@ function showSearchResults(searchTerm) {
                 handleGuess();
             });
             
-            searchResults.appendChild(resultItem);
+            fragment.appendChild(resultItem);
         });
+        
+        // Add all items to DOM at once for better performance
+        searchResults.appendChild(fragment);
         
         searchResults.style.display = 'block';
     } catch (error) {
         console.error('Error showing search results:', error);
+    }
+}
+
+// Show initial list of Pokémon when input is clicked without text
+function showInitialSearchResults() {
+    try {
+        // Clear previous results
+        searchResults.innerHTML = '';
+        
+        // Performance optimization - use document fragment
+        const fragment = document.createDocumentFragment();
+        
+        // Show all Pokémon in the data
+        pokemonData.forEach(pokemon => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            
+            // Create info container with image and text
+            const infoContainer = document.createElement('div');
+            infoContainer.className = 'pokemon-info-container';
+            
+            // Add Pokémon image
+            const imageElement = document.createElement('img');
+            imageElement.className = 'pokemon-image';
+            // Convert pokemon name to lowercase for the filename
+            const imagePath = `data/pictures/${pokemon.name.toLowerCase()}.png`;
+            imageElement.src = imagePath;
+            imageElement.alt = pokemon.name;
+            // Handle image loading errors
+            imageElement.onerror = function() {
+                this.src = 'data/pictures/placeholder.png'; // Fallback image
+                this.onerror = null; // Prevent infinite loop
+            };
+            infoContainer.appendChild(imageElement);
+            
+            // Create text content container
+            const textContainer = document.createElement('div');
+            textContainer.className = 'pokemon-text-container';
+            
+            // Create name element
+            const nameElement = document.createElement('div');
+            nameElement.className = 'pokemon-name';
+            nameElement.textContent = pokemon.name;
+            textContainer.appendChild(nameElement);
+            
+            // Create info elements
+            const detailsContainer = document.createElement('div');
+            detailsContainer.className = 'pokemon-info';
+            
+            // Add Pokédex Number
+            const pokedexElement = document.createElement('span');
+            pokedexElement.textContent = `#${pokemon.pokedex_number}`;
+            detailsContainer.appendChild(pokedexElement);
+            
+            // Add Type(s)
+            const type1Element = document.createElement('span');
+            type1Element.className = `pokemon-type ${pokemon.type1}`;
+            type1Element.textContent = pokemon.type1;
+            detailsContainer.appendChild(type1Element);
+            
+            if (pokemon.type2) {
+                const type2Element = document.createElement('span');
+                type2Element.className = `pokemon-type ${pokemon.type2}`;
+                type2Element.textContent = pokemon.type2;
+                detailsContainer.appendChild(type2Element);
+            }
+            
+            // Add Classification
+            const classElement = document.createElement('span');
+            classElement.textContent = pokemon.classfication;
+            detailsContainer.appendChild(classElement);
+            
+            // Add Height & Weight
+            const heightWeightElement = document.createElement('span');
+            heightWeightElement.textContent = `${pokemon.height_m}m, ${pokemon.weight_kg}kg`;
+            detailsContainer.appendChild(heightWeightElement);
+            
+            textContainer.appendChild(detailsContainer);
+            infoContainer.appendChild(textContainer);
+            resultItem.appendChild(infoContainer);
+            
+            resultItem.addEventListener('click', function() {
+                pokemonGuessInput.value = pokemon.name;
+                searchResults.style.display = 'none';
+                handleGuess();
+            });
+            
+            fragment.appendChild(resultItem);
+        });
+        
+        // Add all items to DOM at once for better performance
+        searchResults.appendChild(fragment);
+        
+        searchResults.style.display = 'block';
+    } catch (error) {
+        console.error('Error showing initial search results:', error);
     }
 }
 
@@ -667,6 +845,23 @@ function displayGuessResult(pokemon, comparison) {
     const guessRow = document.createElement('div');
     guessRow.className = 'guess-row';
     
+    // Add Pokémon image
+    const imageCell = document.createElement('div');
+    imageCell.className = 'guess-attribute';
+    const imageElement = document.createElement('img');
+    imageElement.className = 'pokemon-image-small';
+    // Convert pokemon name to lowercase for the filename
+    const imagePath = `data/pictures/${pokemon.name.toLowerCase()}.png`;
+    imageElement.src = imagePath;
+    imageElement.alt = pokemon.name;
+    // Handle image loading errors
+    imageElement.onerror = function() {
+        this.src = 'data/pictures/placeholder.png'; // Fallback image
+        this.onerror = null; // Prevent infinite loop
+    };
+    imageCell.appendChild(imageElement);
+    guessRow.appendChild(imageCell);
+    
     // Add Pokémon name
     const nameElement = document.createElement('div');
     nameElement.className = `guess-attribute ${comparison.name.status}`;
@@ -770,7 +965,13 @@ function endGame(won) {
         
         // Show Pokémon details with the correct stats
         const displayPokemon = gameState.targetPokemon || targetPokemon;
+        
+        // Create image element for the Pokemon
+        const imagePath = `data/pictures/${displayPokemon.name.toLowerCase()}.png`;
+        const imageHTML = `<img src="${imagePath}" alt="${displayPokemon.name}" class="pokemon-reveal-image" onerror="this.src='data/pictures/placeholder.png'; this.onerror=null;">`;
+        
         pokemonReveal.innerHTML = `
+            ${imageHTML}
             <p><strong>Type:</strong> ${displayPokemon.type1}${displayPokemon.type2 ? '/' + displayPokemon.type2 : ''}</p>
             <p><strong>Pokédex Number:</strong> ${displayPokemon.pokedex_number}</p>
             <p><strong>Classification:</strong> ${displayPokemon.classfication}</p>
