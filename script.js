@@ -1147,7 +1147,13 @@ function loadTodaysGame() {
                 }
                 
                 const displayPokemon = gameState.targetPokemon;
+
+                // Include the Pokémon image just like when the game first ends
+                const imagePath = `data/pictures/${displayPokemon.name.toLowerCase()}.png`;
+                const imageHTML = `<img src="${imagePath}" alt="${displayPokemon.name}" class="pokemon-reveal-image" onerror="this.src='data/pictures/placeholder.png'; this.onerror=null;">`;
+
                 pokemonReveal.innerHTML = `
+                    ${imageHTML}
                     <p><strong>Type:</strong> ${displayPokemon.type1}${displayPokemon.type2 ? '/' + displayPokemon.type2 : ''}</p>
                     <p><strong>Pokédex Number:</strong> ${displayPokemon.pokedex_number}</p>
                     <p><strong>Classification:</strong> ${displayPokemon.classfication}</p>
